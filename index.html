@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jisekai Dungeon - Japanese Learning Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        .retro-font {
+            font-family: 'Press Start 2P', cursive;
+        }
+        .dungeon-bg {
+            background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), 
+                        url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%231a202c"/><path d="M0 0L100 100M100 0L0 100" stroke="%23374151" stroke-width="1"/></svg>');
+        }
+        .pixel-border {
+            border-style: solid;
+            border-width: 4px;
+            border-color: #8B4513 #A0522D #A0522D #8B4513;
+            image-rendering: pixelated;
+        }
+        .pixel-button {
+            border-style: solid;
+            border-width: 4px;
+            border-color: #8B4513 #A0522D #A0522D #8B4513;
+            transition: all 0.1s;
+        }
+        .pixel-button:hover {
+            border-color: #A0522D #8B4513 #8B4513 #A0522D;
+            transform: translateY(2px);
+        }
+        .pixel-button:active {
+            transform: translateY(4px);
+        }
+        .text-shadow {
+            text-shadow: 2px 2px 0 #000;
+        }
+        .floating-menu {
+            box-shadow: 0 0 15px rgba(139, 69, 19, 0.7);
+        }
+        @keyframes correctAnswer {
+            0% { transform: scale(1); background-color: #059669; }
+            50% { transform: scale(1.05); background-color: #10b981; }
+            100% { transform: scale(1); background-color: #059669; }
+        }
+        @keyframes wrongAnswer {
+            0% { transform: translateX(0); background-color: #dc2626; }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); background-color: #dc2626; }
+        }
+        .correct-animation {
+            animation: correctAnswer 0.5s ease-in-out;
+        }
+        .wrong-animation {
+            animation: wrongAnswer 0.5s ease-in-out;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white retro-font dungeon-bg min-h-screen">
+    <div x-data="gameApp()" x-init="init()" class="min-h-screen flex flex-col">
+        <!-- Floating Profile Menu -->
+        <div class="fixed top-4 right-4 z-50">
+            <button @click="profileOpen = !profileOpen" class="pixel-button bg-amber-800 text-white p-2 rounded">
+                <span x-text="player.name"></span> Lv.<span x-text="player.level"></span>
+            </button>
+            
+            <div x-show="profileOpen" @click.outside="profileOpen = false" 
+                 class="mt-2 floating-menu bg-amber-900 text-white p-4 rounded pixel-border w-64 fade-in">
+                <div class="flex items-center mb-4">
+                    <div class="w-16 h-16 bg-amber-700 rounded-full flex items-center justify-center mr-3">
+                        <span x-text="player.name.charAt(0)"></span>
+                    </div>
+                    <div>
+                        <h3 class="text-lg" x-text="player.name"></h3>
+                        <p>Level <span x-text="player.level"></span></p>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>EXP</span>
+                        <span x-text="player.exp + '/' + player.expToNextLevel"></span>
+                    </div>
+                    <div class="w-full bg-gray-700 h-4 rounded-full overflow-hidden">
+                        <div class="bg-yellow-500 h-full" 
+                             :style="'width: ' + (player.exp / player.expToNextLevel * 100) + '%'"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm mb-1">Change Name:</label>
+                    <input type="text" x-model="newName" class="w-full p-2 bg-amber-800 rounded text-white">
+                    <button @click="changeName()" class="pixel-button bg-amber-700 w-full mt-2 p-2">Update Name</button>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm mb-2">Progress:</h4>
+                    <div class="text-xs">
+                        <p>Hiragana: <span x-text="player.hiraganaLearned"></span>/46</p>
+                        <p>Katakana: <span x-text="player.katakanaLearned"></span>/46</p>
+                        <p>Kanji: <span x-text="player.kanjiLearned"></span>/<span x-text="player.kanjiGoal"></span></p>
+                        <p>Daily Phrases: <span x-text="player.phrasesLearned"></span>/<span x-text="dailyPhrases.length"></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Game Screen -->
+        <div class="flex-grow flex items-center justify-center p-4">
+            <div x-show="currentScreen === 'main'" class="text-center fade-in">
+                <h1 class="text-4xl md:text-6xl mb-8 text-yellow-400 text-shadow">JISEKAI DUNGEON</h1>
+                <p class="mb-10 text-lg">Master Japanese to progress through the dungeon!</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                    <button @click="startLearning('hiragana')" 
+                            class="pixel-button bg-red-700 hover:bg-red-600 text-white p-6 text-xl">
+                        Learn Hiragana
+                    </button>
+                    <button @click="startLearning('katakana')" 
+                            class="pixel-button bg-blue-700 hover:bg-blue-600 text-white p-6 text-xl">
+                        Learn Katakana
+                    </button>
+                    <button @click="startLearning('kanji')" 
+                            class="pixel-button bg-green-700 hover:bg-green-600 text-white p-6 text-xl">
+                        Learn Kanji
+                    </button>
+                    <button @click="startLearning('phrases')" 
+                            class="pixel-button bg-indigo-700 hover:bg-indigo-600 text-white p-6 text-xl">
+                        Daily Phrases
+                    </button>
+                    <button @click="startChallenge()" 
+                            class="pixel-button bg-purple-700 hover:bg-purple-600 text-white p-6 text-xl md:col-span-2">
+                        Challenge Dungeon
+                    </button>
+                </div>
+            </div>
+
+            <!-- Learning Screen -->
+            <div x-show="currentScreen === 'learning'" class="w-full max-w-2xl fade-in">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl mb-2 text-yellow-400 text-shadow" x-text="getLearningTitle()"></h2>
+                    <p class="mb-4" x-text="getLearningDescription()"></p>
+                    <div class="flex justify-between items-center">
+                        <button @click="currentScreen = 'main'" class="pixel-button bg-gray-700 p-2">
+                            ← Back
+                        </button>
+                        <div class="text-sm">
+                            Progress: <span x-text="getLearningProgress()"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="currentLearningType !== 'phrases'" class="grid grid-cols-3 md:grid-cols-6 gap-4 mb-8">
+                    <template x-for="(char, index) in getCurrentCharacters()" :key="index">
+                        <div class="aspect-square flex items-center justify-center bg-amber-800 pixel-border"
+                             :class="{'bg-green-700': isCharacterLearned(char)}">
+                            <div class="text-center">
+                                <div class="text-xl md:text-2xl" x-text="char.japanese"></div>
+                                <div class="text-xs mt-1" x-text="char.romaji"></div>
+                                <div x-show="currentLearningType === 'kanji'" class="text-xs mt-1" x-text="char.meaning"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div x-show="currentLearningType === 'phrases'" class="mb-8">
+                    <template x-for="(phrase, index) in dailyPhrases" :key="index">
+                        <div class="bg-amber-800 p-4 pixel-border mb-4" :class="{'bg-green-700': player.phrasesLearned > index}">
+                            <div class="text-lg mb-2" x-text="phrase.japanese"></div>
+                            <div class="text-sm" x-text="phrase.romaji"></div>
+                            <div class="text-xs mt-1" x-text="phrase.meaning"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="text-center">
+                    <button @click="startQuiz()" class="pixel-button bg-yellow-600 hover:bg-yellow-500 p-4 text-lg">
+                        Take Quiz
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quiz Screen -->
+            <div x-show="currentScreen === 'quiz'" class="w-full max-w-2xl fade-in">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl mb-2 text-yellow-400 text-shadow" x-text="getQuizTitle()"></h2>
+                    <div class="flex justify-between items-center mb-4">
+                        <button @click="currentScreen = 'learning'" class="pixel-button bg-gray-700 p-2">
+                            ← Back
+                        </button>
+                        <div>
+                            <span>Question <span x-text="currentQuestionIndex + 1"></span>/<span x-text="quizQuestions.length"></span></span>
+                            <span class="ml-4">Score: <span x-text="quizScore"></span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-amber-800 p-6 pixel-border mb-6 text-center">
+                    <div class="text-5xl mb-4" x-text="currentQuestion.japanese"></div>
+                    <p class="text-lg" x-text="currentQuestion.prompt || 'What is the reading of this character?'"></p>
+                    <div x-show="currentLearningType === 'kanji'" class="text-sm mt-2" x-text="currentQuestion.meaning ? 'Meaning: ' + currentQuestion.meaning : ''"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <template x-for="(option, index) in currentQuestion.options" :key="index">
+                        <button @click="checkAnswer(option)" 
+                                class="pixel-button bg-gray-700 hover:bg-gray-600 p-4 text-lg transition-all duration-200"
+                                :class="{
+                                    'correct-animation': option === currentQuestion.answer && answerChecked,
+                                    'wrong-animation': option !== currentQuestion.answer && answerChecked && selectedAnswer === option
+                                }">
+                            <span x-text="option"></span>
+                        </button>
+                    </template>
+                </div>
+
+                <div x-show="answerChecked" class="mt-6 text-center fade-in">
+                    <div x-show="answerCorrect" class="text-green-400 text-lg mb-4">
+                        Correct! Well done!
+                    </div>
+                    <div x-show="!answerCorrect" class="text-red-400 text-lg mb-4">
+                        Incorrect. The answer is: <span x-text="currentQuestion.answer"></span>
+                    </div>
+                    <button @click="nextQuestion()" class="pixel-button bg-yellow-600 hover:bg-yellow-500 p-3">
+                        Next Question
+                    </button>
+                </div>
+            </div>
+
+            <!-- Challenge Screen -->
+            <div x-show="currentScreen === 'challenge'" class="w-full max-w-2xl fade-in">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl mb-2 text-yellow-400 text-shadow">DUNGEON CHALLENGE</h2>
+                    <p class="mb-4">Test your knowledge in the dungeon!</p>
+                    <div class="flex justify-between items-center">
+                        <button @click="currentScreen = 'main'" class="pixel-button bg-gray-700 p-2">
+                            ← Back
+                        </button>
+                        <div class="text-sm">
+                            Floor: <span x-text="player.dungeonFloor"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-amber-800 p-6 pixel-border mb-6 text-center">
+                    <div class="text-5xl mb-4" x-text="dungeonChallenge.japanese"></div>
+                    <p class="text-lg" x-text="dungeonChallenge.prompt || 'Defeat the enemy by selecting the correct reading!'"></p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <template x-for="(option, index) in dungeonChallenge.options" :key="index">
+                        <button @click="checkDungeonAnswer(option)" 
+                                class="pixel-button bg-gray-700 hover:bg-gray-600 p-4 text-lg transition-all duration-200"
+                                :class="{
+                                    'correct-animation': option === dungeonChallenge.answer && dungeonAnswerChecked,
+                                    'wrong-animation': option !== dungeonChallenge.answer && dungeonAnswerChecked && selectedDungeonAnswer === option
+                                }">
+                            <span x-text="option"></span>
+                        </button>
+                    </template>
+                </div>
+
+                <div x-show="dungeonAnswerChecked" class="mt-6 text-center fade-in">
+                    <div x-show="dungeonAnswerCorrect" class="text-green-400 text-lg mb-4">
+                        Victory! You defeated the enemy and advanced to the next floor!
+                    </div>
+                    <div x-show="!dungeonAnswerCorrect" class="text-red-400 text-lg mb-4">
+                        Defeat! The enemy was too strong. The correct answer was: <span x-text="dungeonChallenge.answer"></span>
+                    </div>
+                    <button @click="nextDungeonChallenge()" class="pixel-button bg-yellow-600 hover:bg-yellow-500 p-3">
+                        <span x-text="dungeonAnswerCorrect ? 'Continue' : 'Try Again'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio elements for sound effects -->
+        <audio id="correctSound" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA=="></audio>
+        <audio id="wrongSound" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA=="></audio>
+    </div>
+
+    <script>
+        function gameApp() {
+            return {
+                // Game state
+                currentScreen: 'main',
+                currentLearningType: '',
+                profileOpen: false,
+                newName: '',
+                
+                // Quiz state
+                quizQuestions: [],
+                currentQuestionIndex: 0,
+                currentQuestion: {},
+                quizScore: 0,
+                answerChecked: false,
+                answerCorrect: false,
+                selectedAnswer: '',
+                
+                // Dungeon state
+                dungeonChallenge: {},
+                dungeonAnswerChecked: false,
+                dungeonAnswerCorrect: false,
+                selectedDungeonAnswer: '',
+                
+                // Player data
+                player: {
+                    name: 'Adventurer',
+                    level: 1,
+                    exp: 0,
+                    expToNextLevel: 100,
+                    hiraganaLearned: 0,
+                    katakanaLearned: 0,
+                    kanjiLearned: 0,
+                    phrasesLearned: 0,
+                    kanjiGoal: 10,
+                    dungeonFloor: 1
+                },
+                
+                // Character data
+                hiragana: [
+                    { japanese: 'あ', romaji: 'a' }, { japanese: 'い', romaji: 'i' }, { japanese: 'う', romaji: 'u' },
+                    { japanese: 'え', romaji: 'e' }, { japanese: 'お', romaji: 'o' }, { japanese: 'か', romaji: 'ka' },
+                    { japanese: 'き', romaji: 'ki' }, { japanese: 'く', romaji: 'ku' }, { japanese: 'け', romaji: 'ke' },
+                    { japanese: 'こ', romaji: 'ko' }, { japanese: 'さ', romaji: 'sa' }, { japanese: 'し', romaji: 'shi' },
+                    { japanese: 'す', romaji: 'su' }, { japanese: 'せ', romaji: 'se' }, { japanese: 'そ', romaji: 'so' },
+                    { japanese: 'た', romaji: 'ta' }, { japanese: 'ち', romaji: 'chi' }, { japanese: 'つ', romaji: 'tsu' },
+                    { japanese: 'て', romaji: 'te' }, { japanese: 'と', romaji: 'to' }, { japanese: 'な', romaji: 'na' },
+                    { japanese: 'に', romaji: 'ni' }, { japanese: 'ぬ', romaji: 'nu' }, { japanese: 'ね', romaji: 'ne' },
+                    { japanese: 'の', romaji: 'no' }, { japanese: 'は', romaji: 'ha' }, { japanese: 'ひ', romaji: 'hi' },
+                    { japanese: 'ふ', romaji: 'fu' }, { japanese: 'へ', romaji: 'he' }, { japanese: 'ほ', romaji: 'ho' },
+                    { japanese: 'ま', romaji: 'ma' }, { japanese: 'み', romaji: 'mi' }, { japanese: 'む', romaji: 'mu' },
+                    { japanese: 'め', romaji: 'me' }, { japanese: 'も', romaji: 'mo' }, { japanese: 'や', romaji: 'ya' },
+                    { japanese: 'ゆ', romaji: 'yu' }, { japanese: 'よ', romaji: 'yo' }, { japanese: 'ら', romaji: 'ra' },
+                    { japanese: 'り', romaji: 'ri' }, { japanese: 'る', romaji: 'ru' }, { japanese: 'れ', romaji: 're' },
+                    { japanese: 'ろ', romaji: 'ro' }, { japanese: 'わ', romaji: 'wa' }, { japanese: 'を', romaji: 'wo' },
+                    { japanese: 'ん', romaji: 'n' }
+                ],
+                
+                katakana: [
+                    { japanese: 'ア', romaji: 'a' }, { japanese: 'イ', romaji: 'i' }, { japanese: 'ウ', romaji: 'u' },
+                    { japanese: 'エ', romaji: 'e' }, { japanese: 'オ', romaji: 'o' }, { japanese: 'カ', romaji: 'ka' },
+                    { japanese: 'キ', romaji: 'ki' }, { japanese: 'ク', romaji: 'ku' }, { japanese: 'ケ', romaji: 'ke' },
+                    { japanese: 'コ', romaji: 'ko' }, { japanese: 'サ', romaji: 'sa' }, { japanese: 'シ', romaji: 'shi' },
+                    { japanese: 'ス', romaji: 'su' }, { japanese: 'セ', romaji: 'se' }, { japanese: 'ソ', romaji: 'so' },
+                    { japanese: 'タ', romaji: 'ta' }, { japanese: 'チ', romaji: 'chi' }, { japanese: 'ツ', romaji: 'tsu' },
+                    { japanese: 'テ', romaji: 'te' }, { japanese: 'ト', romaji: 'to' }, { japanese: 'ナ', romaji: 'na' },
+                    { japanese: 'ニ', romaji: 'ni' }, { japanese: 'ヌ', romaji: 'nu' }, { japanese: 'ネ', romaji: 'ne' },
+                    { japanese: 'ノ', romaji: 'no' }, { japanese: 'ハ', romaji: 'ha' }, { japanese: 'ヒ', romaji: 'hi' },
+                    { japanese: 'フ', romaji: 'fu' }, { japanese: 'ヘ', romaji: 'he' }, { japanese: 'ホ', romaji: 'ho' },
+                    { japanese: 'マ', romaji: 'ma' }, { japanese: 'ミ', romaji: 'mi' }, { japanese: 'ム', romaji: 'mu' },
+                    { japanese: 'メ', romaji: 'me' }, { japanese: 'モ', romaji: 'mo' }, { japanese: 'ヤ', romaji: 'ya' },
+                    { japanese: 'ユ', romaji: 'yu' }, { japanese: 'ヨ', romaji: 'yo' }, { japanese: 'ラ', romaji: 'ra' },
+                    { japanese: 'リ', romaji: 'ri' }, { japanese: 'ル', romaji: 'ru' }, { japanese: 'レ', romaji: 're' },
+                    { japanese: 'ロ', romaji: 'ro' }, { japanese: 'ワ', romaji: 'wa' }, { japanese: 'ヲ', romaji: 'wo' },
+                    { japanese: 'ン', romaji: 'n' }
+                ],
+                
+                kanji: [
+                    { japanese: '一', romaji: 'ichi', meaning: 'one' },
+                    { japanese: '二', romaji: 'ni', meaning: 'two' },
+                    { japanese: '三', romaji: 'san', meaning: 'three' },
+                    { japanese: '四', romaji: 'shi', meaning: 'four' },
+                    { japanese: '五', romaji: 'go', meaning: 'five' },
+                    { japanese: '六', romaji: 'roku', meaning: 'six' },
+                    { japanese: '七', romaji: 'shichi', meaning: 'seven' },
+                    { japanese: '八', romaji: 'hachi', meaning: 'eight' },
+                    { japanese: '九', romaji: 'kyuu', meaning: 'nine' },
+                    { japanese: '十', romaji: 'juu', meaning: 'ten' },
+                    { japanese: '人', romaji: 'hito', meaning: 'person' },
+                    { japanese: '日', romaji: 'hi', meaning: 'sun, day' },
+                    { japanese: '月', romaji: 'tsuki', meaning: 'moon, month' },
+                    { japanese: '火', romaji: 'hi', meaning: 'fire' },
+                    { japanese: '水', romaji: 'mizu', meaning: 'water' },
+                    { japanese: '木', romaji: 'ki', meaning: 'tree' },
+                    { japanese: '金', romaji: 'kane', meaning: 'money, gold' },
+                    { japanese: '土', romaji: 'tsuchi', meaning: 'earth' },
+                    { japanese: '山', romaji: 'yama', meaning: 'mountain' },
+                    { japanese: '川', romaji: 'kawa', meaning: 'river' }
+                ],
+                
+                dailyPhrases: [
+                    { japanese: 'おはようございます', romaji: 'ohayou gozaimasu', meaning: 'Good morning' },
+                    { japanese: 'こんにちは', romaji: 'konnichiwa', meaning: 'Hello/Good afternoon' },
+                    { japanese: 'こんばんは', romaji: 'konbanwa', meaning: 'Good evening' },
+                    { japanese: 'ありがとうございます', romaji: 'arigatou gozaimasu', meaning: 'Thank you' },
+                    { japanese: 'すみません', romaji: 'sumimasen', meaning: 'Excuse me/I\'m sorry' },
+                    { japanese: 'お願いします', romaji: 'onegaishimasu', meaning: 'Please' },
+                    { japanese: 'はい', romaji: 'hai', meaning: 'Yes' },
+                    { japanese: 'いいえ', romaji: 'iie', meaning: 'No' },
+                    { japanese: 'はじめまして', romaji: 'hajimemashite', meaning: 'Nice to meet you' },
+                    { japanese: 'さようなら', romaji: 'sayounara', meaning: 'Goodbye' }
+                ],
+                
+                // Initialize the game
+                init() {
+                    this.loadPlayerData();
+                    this.newName = this.player.name;
+                    this.setupAudio();
+                },
+                
+                // Setup audio elements
+                setupAudio() {
+                    // Create simple beep sounds using the Web Audio API
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Correct sound (higher pitch)
+                    const correctOscillator = audioContext.createOscillator();
+                    const correctGain = audioContext.createGain();
+                    correctOscillator.connect(correctGain);
+                    correctGain.connect(audioContext.destination);
+                    correctOscillator.frequency.value = 800;
+                    correctOscillator.type = 'sine';
+                    correctGain.gain.value = 0.3;
+                    
+                    // Store audio functions
+                    this.playCorrectSound = () => {
+                        if (audioContext.state === 'suspended') {
+                            audioContext.resume();
+                        }
+                        correctOscillator.start();
+                        correctGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+                        setTimeout(() => correctOscillator.stop(), 300);
+                    };
+                    
+                    // Wrong sound (lower pitch)
+                    const wrongOscillator = audioContext.createOscillator();
+                    const wrongGain = audioContext.createGain();
+                    wrongOscillator.connect(wrongGain);
+                    wrongGain.connect(audioContext.destination);
+                    wrongOscillator.frequency.value = 300;
+                    wrongOscillator.type = 'sawtooth';
+                    wrongGain.gain.value = 0.3;
+                    
+                    this.playWrongSound = () => {
+                        if (audioContext.state === 'suspended') {
+                            audioContext.resume();
+                        }
+                        wrongOscillator.start();
+                        wrongGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+                        setTimeout(() => wrongOscillator.stop(), 500);
+                    };
+                },
+                
+                // Load player data from localStorage
+                loadPlayerData() {
+                    const savedData = localStorage.getItem('jisekaiDungeonPlayer');
+                    if (savedData) {
+                        this.player = JSON.parse(savedData);
+                    }
+                },
+                
+                // Save player data to localStorage
+                savePlayerData() {
+                    localStorage.setItem('jisekaiDungeonPlayer', JSON.stringify(this.player));
+                },
+                
+                // Change player name
+                changeName() {
+                    if (this.newName.trim() !== '') {
+                        this.player.name = this.newName.trim();
+                        this.savePlayerData();
+                        this.profileOpen = false;
+                    }
+                },
+                
+                // Get learning title
+                getLearningTitle() {
+                    if (this.currentLearningType === 'hiragana') return 'HIRAGANA TRAINING';
+                    if (this.currentLearningType === 'katakana') return 'KATAKANA TRAINING';
+                    if (this.currentLearningType === 'kanji') return 'KANJI TRAINING';
+                    if (this.currentLearningType === 'phrases') return 'DAILY PHRASES';
+                    return '';
+                },
+                
+                // Get learning description
+                getLearningDescription() {
+                    if (this.currentLearningType === 'hiragana') return 'Learn the basic Japanese syllabary';
+                    if (this.currentLearningType === 'katakana') return 'Learn the syllabary used for foreign words';
+                    if (this.currentLearningType === 'kanji') return 'Learn Chinese characters used in Japanese';
+                    if (this.currentLearningType === 'phrases') return 'Learn useful everyday Japanese phrases';
+                    return '';
+                },
+                
+                // Get quiz title
+                getQuizTitle() {
+                    if (this.currentLearningType === 'hiragana') return 'HIRAGANA QUIZ';
+                    if (this.currentLearningType === 'katakana') return 'KATAKANA QUIZ';
+                    if (this.currentLearningType === 'kanji') return 'KANJI QUIZ';
+                    if (this.currentLearningType === 'phrases') return 'PHRASES QUIZ';
+                    return '';
+                },
+                
+                // Start learning a character type
+                startLearning(type) {
+                    this.currentLearningType = type;
+                    this.currentScreen = 'learning';
+                },
+                
+                // Get characters for current learning type
+                getCurrentCharacters() {
+                    if (this.currentLearningType === 'hiragana') return this.hiragana;
+                    if (this.currentLearningType === 'katakana') return this.katakana;
+                    if (this.currentLearningType === 'kanji') return this.kanji;
+                    return [];
+                },
+                
+                // Check if character is learned
+                isCharacterLearned(char) {
+                    // For demo purposes, mark as learned if player has progress in that category
+                    if (this.currentLearningType === 'hiragana') {
+                        return this.player.hiraganaLearned > 0;
+                    } else if (this.currentLearningType === 'katakana') {
+                        return this.player.katakanaLearned > 0;
+                    } else if (this.currentLearningType === 'kanji') {
+                        return this.player.kanjiLearned > 0;
+                    } else if (this.currentLearningType === 'phrases') {
+                        return this.player.phrasesLearned > 0;
+                    }
+                    return false;
+                },
+                
+                // Get learning progress
+                getLearningProgress() {
+                    if (this.currentLearningType === 'hiragana') {
+                        return `${this.player.hiraganaLearned}/${this.hiragana.length}`;
+                    } else if (this.currentLearningType === 'katakana') {
+                        return `${this.player.katakanaLearned}/${this.katakana.length}`;
+                    } else if (this.currentLearningType === 'kanji') {
+                        return `${this.player.kanjiLearned}/${this.player.kanjiGoal}`;
+                    } else if (this.currentLearningType === 'phrases') {
+                        return `${this.player.phrasesLearned}/${this.dailyPhrases.length}`;
+                    }
+                    return '0/0';
+                },
+                
+                // Start quiz for current learning type
+                startQuiz() {
+                    let characters = [];
+                    let prompt = 'What is the reading of this character?';
+                    
+                    if (this.currentLearningType === 'phrases') {
+                        characters = this.dailyPhrases;
+                        prompt = 'What is the meaning of this phrase?';
+                    } else {
+                        characters = this.getCurrentCharacters();
+                    }
+                    
+                    this.quizQuestions = [];
+                    
+                    // Create 5 random questions
+                    for (let i = 0; i < 5; i++) {
+                        const randomChar = characters[Math.floor(Math.random() * characters.length)];
+                        let answer, options;
+                        
+                        if (this.currentLearningType === 'phrases') {
+                            answer = randomChar.meaning;
+                            options = [randomChar.meaning];
+                            
+                            // Add 3 random incorrect options
+                            while (options.length < 4) {
+                                const randomOption = characters[Math.floor(Math.random() * characters.length)].meaning;
+                                if (!options.includes(randomOption)) {
+                                    options.push(randomOption);
+                                }
+                            }
+                        } else {
+                            answer = randomChar.romaji;
+                            options = [randomChar.romaji];
+                            
+                            // Add 3 random incorrect options
+                            while (options.length < 4) {
+                                const randomOption = characters[Math.floor(Math.random() * characters.length)].romaji;
+                                if (!options.includes(randomOption)) {
+                                    options.push(randomOption);
+                                }
+                            }
+                        }
+                        
+                        // Shuffle options
+                        this.shuffleArray(options);
+                        
+                        this.quizQuestions.push({
+                            japanese: randomChar.japanese,
+                            answer: answer,
+                            options: options,
+                            prompt: prompt,
+                            meaning: randomChar.meaning
+                        });
+                    }
+                    
+                    this.currentQuestionIndex = 0;
+                    this.quizScore = 0;
+                    this.currentQuestion = this.quizQuestions[0];
+                    this.currentScreen = 'quiz';
+                    this.answerChecked = false;
+                },
+                
+                // Check answer in quiz
+                checkAnswer(selected) {
+                    this.selectedAnswer = selected;
+                    this.answerChecked = true;
+                    this.answerCorrect = selected === this.currentQuestion.answer;
+                    
+                    // Play sound effect
+                    if (this.answerCorrect) {
+                        this.playCorrectSound();
+                        this.quizScore++;
+                    } else {
+                        this.playWrongSound();
+                    }
+                },
+                
+                // Move to next question
+                nextQuestion() {
+                    this.currentQuestionIndex++;
+                    
+                    if (this.currentQuestionIndex < this.quizQuestions.length) {
+                        this.currentQuestion = this.quizQuestions[this.currentQuestionIndex];
+                        this.answerChecked = false;
+                    } else {
+                        // Quiz completed
+                        this.awardExp(this.quizScore * 10);
+                        
+                        // Update learned count if this was the first successful quiz
+                        if (this.quizScore >= 3) {
+                            if (this.currentLearningType === 'hiragana' && this.player.hiraganaLearned === 0) {
+                                this.player.hiraganaLearned = 10;
+                            } else if (this.currentLearningType === 'katakana' && this.player.katakanaLearned === 0) {
+                                this.player.katakanaLearned = 10;
+                            } else if (this.currentLearningType === 'kanji' && this.player.kanjiLearned === 0) {
+                                this.player.kanjiLearned = 5;
+                            } else if (this.currentLearningType === 'phrases' && this.player.phrasesLearned === 0) {
+                                this.player.phrasesLearned = 5;
+                            }
+                            this.savePlayerData();
+                        }
+                        
+                        this.currentScreen = 'learning';
+                    }
+                },
+                
+                // Start dungeon challenge
+                startChallenge() {
+                    this.currentScreen = 'challenge';
+                    this.generateDungeonChallenge();
+                },
+                
+                // Generate a dungeon challenge
+                generateDungeonChallenge() {
+                    // Mix characters from all learned types
+                    const allCharacters = [];
+                    const allPhrases = [];
+                    
+                    if (this.player.hiraganaLearned > 0) {
+                        allCharacters.push(...this.hiragana.slice(0, Math.min(10, this.player.hiraganaLearned)));
+                    }
+                    
+                    if (this.player.katakanaLearned > 0) {
+                        allCharacters.push(...this.katakana.slice(0, Math.min(10, this.player.katakanaLearned)));
+                    }
+                    
+                    if (this.player.kanjiLearned > 0) {
+                        allCharacters.push(...this.kanji.slice(0, Math.min(5, this.player.kanjiLearned)));
+                    }
+                    
+                    if (this.player.phrasesLearned > 0) {
+                        allPhrases.push(...this.dailyPhrases.slice(0, Math.min(5, this.player.phrasesLearned)));
+                    }
+                    
+                    // Decide whether to use a character or phrase
+                    const usePhrase = allPhrases.length > 0 && Math.random() > 0.7;
+                    
+                    let randomItem, options, answer, prompt;
+                    
+                    if (usePhrase && allPhrases.length > 0) {
+                        randomItem = allPhrases[Math.floor(Math.random() * allPhrases.length)];
+                        answer = randomItem.meaning;
+                        options = [randomItem.meaning];
+                        prompt = 'What is the meaning of this phrase?';
+                        
+                        // Add 3 random incorrect options
+                        while (options.length < 4) {
+                            const randomOption = allPhrases[Math.floor(Math.random() * allPhrases.length)].meaning;
+                            if (!options.includes(randomOption)) {
+                                options.push(randomOption);
+                            }
+                        }
+                    } else {
+                        if (allCharacters.length === 0) {
+                            // If nothing learned yet, use first 5 hiragana
+                            allCharacters.push(...this.hiragana.slice(0, 5));
+                        }
+                        
+                        randomItem = allCharacters[Math.floor(Math.random() * allCharacters.length)];
+                        answer = randomItem.romaji;
+                        options = [randomItem.romaji];
+                        prompt = 'Defeat the enemy by selecting the correct reading!';
+                        
+                        // Add 3 random incorrect options
+                        while (options.length < 4) {
+                            const randomOption = allCharacters[Math.floor(Math.random() * allCharacters.length)].romaji;
+                            if (!options.includes(randomOption)) {
+                                options.push(randomOption);
+                            }
+                        }
+                    }
+                    
+                    // Shuffle options
+                    this.shuffleArray(options);
+                    
+                    this.dungeonChallenge = {
+                        japanese: randomItem.japanese,
+                        answer: answer,
+                        options: options,
+                        prompt: prompt
+                    };
+                    
+                    this.dungeonAnswerChecked = false;
+                },
+                
+                // Check dungeon answer
+                checkDungeonAnswer(selected) {
+                    this.selectedDungeonAnswer = selected;
+                    this.dungeonAnswerChecked = true;
+                    this.dungeonAnswerCorrect = selected === this.dungeonChallenge.answer;
+                    
+                    // Play sound effect
+                    if (this.dungeonAnswerCorrect) {
+                        this.playCorrectSound();
+                        this.awardExp(20);
+                        this.player.dungeonFloor++;
+                        this.savePlayerData();
+                    } else {
+                        this.playWrongSound();
+                    }
+                },
+                
+                // Move to next dungeon challenge
+                nextDungeonChallenge() {
+                    this.generateDungeonChallenge();
+                },
+                
+                // Award experience points
+                awardExp(amount) {
+                    this.player.exp += amount;
+                    
+                    // Level up if enough exp
+                    while (this.player.exp >= this.player.expToNextLevel) {
+                        this.player.exp -= this.player.expToNextLevel;
+                        this.player.level++;
+                        this.player.expToNextLevel = Math.floor(this.player.expToNextLevel * 1.5);
+                    }
+                    
+                    this.savePlayerData();
+                },
+                
+                // Utility function to shuffle array
+                shuffleArray(array) {
+                    for (let i = array.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [array[i], array[j]] = [array[j], array[i]];
+                    }
+                    return array;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

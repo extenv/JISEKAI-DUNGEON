@@ -1,0 +1,86 @@
+/* Jisekai Dungeon - Main Styles */
+
+/* Retro font */
+.retro-font {
+    font-family: 'Press Start 2P', cursive;
+}
+
+/* Dungeon background pattern */
+.dungeon-bg {
+    background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%231a202c"/><path d="M0 0L100 100M100 0L0 100" stroke="%23374151" stroke-width="1"/></svg>');
+}
+
+/* Pixel border style */
+.pixel-border {
+    border-style: solid;
+    border-width: 4px;
+    border-color: #8B4513 #A0522D #A0522D #8B4513;
+    image-rendering: pixelated;
+}
+
+/* Pixel button style */
+.pixel-button {
+    border-style: solid;
+    border-width: 4px;
+    border-color: #8B4513 #A0522D #A0522D #8B4513;
+    transition: all 0.1s;
+}
+
+.pixel-button:hover {
+    border-color: #A0522D #8B4513 #8B4513 #A0522D;
+    transform: translateY(2px);
+}
+
+.pixel-button:active {
+    transform: translateY(4px);
+}
+
+/* Text shadow effect */
+.text-shadow {
+    text-shadow: 2px 2px 0 #000;
+}
+
+/* Floating menu shadow */
+.floating-menu {
+    box-shadow: 0 0 15px rgba(139, 69, 19, 0.7);
+}
+
+/* Correct answer animation */
+@keyframes correctAnswer {
+    0% { transform: scale(1); background-color: #059669; }
+    50% { transform: scale(1.05); background-color: #10b981; }
+    100% { transform: scale(1); background-color: #059669; }
+}
+
+/* Wrong answer animation */
+@keyframes wrongAnswer {
+    0% { transform: translateX(0); background-color: #dc2626; }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); background-color: #dc2626; }
+}
+
+.correct-animation {
+    animation: correctAnswer 0.5s ease-in-out;
+}
+
+.wrong-animation {
+    animation: wrongAnswer 0.5s ease-in-out;
+}
+
+/* Fade in animation */
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Canvas container */
+.canvas-container {
+    touch-action: none;
+}
